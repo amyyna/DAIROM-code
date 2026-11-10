@@ -1,0 +1,125 @@
+real bias = 0.2;
+string directory = "/home/YOUR-PATH/code/2d/fem/";
+real x0=-2,x1=2;
+real y0=-2,y1=2;
+int n=80,m=80;
+mesh Th=square(n,m,[x0+(x1-x0)*x,y0+(y1-y0)*y]);
+savemesh(Th,"twosquares.msh");
+
+//Labeling both regions separately
+int N=Th(0,0).region;
+int M=Th(1.5,1.5).region;
+{
+	func f = max(abs(x),abs(y));
+	mesh Th1 = trunc(Th, (f<1), label=10);
+	int[int] rh = [N,10];
+	Th1 = change(Th1, region = rh);
+	mesh Th2 = trunc(Th, (f>1), label=20);
+	int[int] rb = [M,20];
+	Th2 = change(Th2, region = rb);
+	Th = Th2 + Th1;
+	// plot(Th1,Th2);
+}
+//Defining patches
+int REG;
+real xc,yc, disc=0.35;
+string meshName;
+int counter = 1;
+mesh[int] meshes(1600);
+for (int i=1;i<4/disc;i++){
+	for (int j=1;j<4/disc;j++){
+		xc=2-i*disc;
+		yc=2-j*disc;
+		// if(abs(xc)-2<disc || abs(yc)-2<disc){
+			// xc=2-i*disc/2;
+			// yc=2-j*disc/2;
+		// }
+		REG=Th(xc,yc).region;
+		{
+			func f = max(abs(x-xc),abs(y-yc));
+			meshes[counter] = trunc(Th, (f<0.2/4), label=20+counter);
+			int[int] rh = [REG,20+counter*10];
+			meshes[counter] = change(meshes[counter], region = rh);
+			counter = counter+1;
+		}
+	}
+}
+//plot(Th, meshes);
+
+
+
+// cout <<"counter = " << counter<<endl;
+real phi = 3, homogNeumann = 0, T=10, dt=0.1, u0 = 20, um = 30, par = 1, nbpar = 20;
+fespace Vh(Th,P1);
+
+varf mass(u,v)= int2d(Th)(u*v);
+matrix MM = mass(Vh,Vh);
+ofstream fm(directory+"Offline/matrices/mass.txt");
+for (int i=0;i<MM.n ; i++){
+	for (int j=0;j<MM.m ; j++){
+		if (MM[i,j]!=0){
+			fm <<i<<" "<<j<<" "<<MM[i,j]<<" "<<endl;
+		}
+	}
+}
+varf stiff(u,v)= int2d(Th)(dx(u)*dx(v) + dy(u)*dy(v));//+on(1,2,3,4,u=0);
+matrix KK = stiff(Vh,Vh);
+ofstream fk(directory+"Offline/matrices/stiff.txt");
+for (int i=0;i<KK.n ; i++){
+	for (int j=0;j<KK.m ; j++){
+		if (KK[i,j]!=0){
+			fk <<i<<" "<<j<<" "<<KK[i,j]<<" " << endl;
+		}
+	}
+}
+varf L(u,v)= int1d(Th,3,4)(phi*v)+int1d(Th,1,2)(homogNeumann*v);
+real[int] FF = L(0,Vh);
+ofstream fs(directory+"Offline/matrices/Fneumann.txt");
+for (int j=0;j<FF.n ; j++){
+fs << FF[j] << endl;
+}
+ofstream fnb(directory+"Offline/nb_dof.txt");
+fnb<<FF.n<<endl;
+
+
+//Generate a unique solution that will be taken as BK (mu = 10)
+for (int par=1; par<=nbpar;par+=1){
+	Vh u, v;
+	problem diffusionReaction(u,v) = int2d(Th)((dx(u)*dx(v)+dy(u)*dy(v)) + (par/nbpar)*u*v)
+                                        	- int2d(Th)(v)
+                							- int1d(Th,1,4)(phi*v)
+                							- int1d(Th,3,2)(homogNeumann*v);//+ on(3,2,u=u0);// 
+	//ofstream f(directory+"Offline/BK_SOL/sol"+string(par)+".txt");
+	diffusionReaction;
+	if(par == 1 || par ==10 || par ==20){
+        	cout << "par = " << par << endl;
+        	plot(u, fill=1, value=true, wait = 10);
+	}
+	/***
+	for (int i = 0; i < Vh.ndof; i++) {
+        f << u[][i] << endl;
+    }
+    ***/
+}
+
+
+//Synthetic data generation for a bipartite domain
+for (int par=1; par<=nbpar;par+=1){
+	Vh u, v;
+	problem bipartiteDiffusionReaction(u,v)= int2d(Th,10)((dx(u)*dx(v)+dy(u)*dy(v)) + bias*u*v) 
+                                         	+ int2d(Th,20)((dx(u)*dx(v)+dy(u)*dy(v)) + (par/nbpar)*u*v)
+                                             - int2d(Th)(v)
+                                            	 - int1d(Th,1,4)(phi*v)
+                                            	 -int1d(Th,3,2)(homogNeumann*v);//+ on(3,2, u=u0) 
+	//ofstream foo(directory+"Offline/TRUE_SOLS/sol"+string(par)+".txt");
+	bipartiteDiffusionReaction;
+	if(par == 1 || par ==10 || par ==20){
+        	cout << "par = " << par << endl;
+        	plot(u, fill=1, value=true, wait=10);
+    }
+	/***
+	for (int i = 0; i < Vh.ndof; i++) {
+        foo << u[][i] << endl;
+    }
+    ***/
+}

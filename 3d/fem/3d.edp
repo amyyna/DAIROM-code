@@ -1,0 +1,131 @@
+load "msh3";
+load "medit";
+
+string directory = "/home/YOUR-PATH/3d/fem/";
+
+// Parameters
+int nn = 30; // Mesh quality
+
+real L = 0.5;              // Domain size
+
+// --------------------------------------------------
+// 2. MESH
+// --------------------------------------------------
+int[int] labs = [1,2,2,1,1,2];
+mesh3 Th = cube(nn, nn, nn, label=labs);
+Th = trunc(Th, (x < L) | (y < L) | (z < L), label=1);
+
+cout << "Global mesh tetrahedra = " << Th.nt << endl;
+//plot(Th, wait=true);
+//medit("mesh", Th);
+
+
+fespace Vh(Th,P1);
+
+// Macro
+macro Grad(u) [dx(u), dy(u), dz(u)] //
+
+//real k=1e4;
+real f=1, coef=1e-2;
+Vh u, v, uold = 0;
+// Define the weak form and solve
+                          
+                          
+varf mass(u,v)= int3d(Th)(u*v);
+matrix MM = mass(Vh,Vh);
+ofstream fm(directory+"Offline/matrices/mass.txt");
+fm << MM;
+
+
+varf stiff(u,v)= int3d(Th)(dx(u)*dx(v) + dy(u)*dy(v));//+on(1,2,3,4,u=0);
+matrix KK = stiff(Vh,Vh);
+ofstream fk(directory+"Offline/matrices/stiff.txt");
+fk << KK;
+
+ofstream fnb(directory+"Offline/nb_dof.txt");
+fnb<<Vh.ndof<<endl;
+                          
+                                                             
+// Picard iteration parameters
+int maxIter = 300;
+real tol = 1e-8;
+real err;
+real num,den;
+real alpha = 0.5;
+
+// /*
+
+cout << "Started solving PDE" << endl;
+
+real[int] kList = [1e-2, 2e-2, 3e-2, 4e-2, 5e-2, 6e-2, 7e-2, 8e-2, 9e-2, 
+                   1e-1, 2e-1, 3e-1, 4e-1, 5e-1, 6e-1, 7e-1, 8e-1, 9e-1, 
+                   1, 2, 3, 4, 5, 6, 7, 8, 9, 
+                   10, 20, 30, 40, 50, 60, 70, 80, 90, 
+                   100, 200, 300, 400, 500];
+// 800, 1000, 3000, 5000, 7000, 10000];
+for (int ik = 0; ik < kList.n; ik++){
+    real k = kList[ik];
+    problem TrueNonlinearDiffusion(u, v, solver = GMRES, eps = 1e-12) = int3d(Th)( coef * Grad(u)' * Grad(v) 
+                                            + k * (uold) * u * v ) 
+                                            - int3d(Th)( f * v) + on(1, u=0);
+    for (int it = 0; it < maxIter; it++){
+        TrueNonlinearDiffusion;
+        u = alpha*u + (1.0-alpha)*uold;
+        num = sqrt(int3d(Th)((u - uold)^2));
+        den = sqrt(int3d(Th)(u^2));
+        err = num / max(den, 1e-12);
+        //cout << "Iteration " << it << "   Error = " << err << endl;
+        if (err < tol) break;
+        uold = u;
+    }
+    // Report solution scale
+    cout << "  max(u) = " << u[].max << endl;
+    //Store solution
+    ofstream f(directory+"Offline/BK_SOL/sol"+string(ik)+".txt");
+	for (int i = 0; i < Vh.ndof; i++) {
+        f << u[][i] << endl;
+    }
+    // IMPORTANT: use converged solution as initial guess
+    uold = u;
+	if(ik == 0 || ik ==9 || ik ==19){ medit("BK solution k="+k, Th, u); }
+}
+
+// Start timer
+real t0 = clock();
+uold = 0;
+for (int ik = 0; ik < kList.n; ik++){
+    real k = kList[ik];
+    problem bkNonlinearDiffusion(u, v, solver = GMRES, eps = 1e-12) = int3d(Th)( coef * Grad(u)' * Grad(v) 
+                                            + k * (uold^2) * u * v ) 
+                                            - int3d(Th)( f * v) + on(1, u=0);
+    for (int it = 0; it < maxIter; it++){
+        bkNonlinearDiffusion;
+        u = alpha*u + (1.0-alpha)*uold;
+        num = sqrt(int3d(Th)((u - uold)^2));
+        den = sqrt(int3d(Th)(u^2));
+        err = num / max(den, 1e-12);
+        //cout << "Iteration " << it << "   Error = " << err << endl;
+        if (err < tol) break;
+        uold = u;
+    }
+    // Report solution scale
+    cout << "  max(u) = " << u[].max << endl;
+    //Store solution
+    ofstream f(directory+"Offline/TRUE_SOLS/sol"+string(ik)+".txt");
+	for (int i = 0; i < Vh.ndof; i++) {
+        f << u[][i] << endl;
+    }
+    // IMPORTANT: use converged solution as initial guess
+    uold = u;
+	if(ik == 0 || ik ==9 || ik ==19){ medit("True solution k="+k, Th, u); }
+}
+// End timer
+real t1 = clock();
+
+// Print solving time
+cout << "Total solving time (s): " << (t1 - t0) << endl;
+
+// /*
+
+
+// */

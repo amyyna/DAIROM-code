@@ -1,0 +1,1 @@
+Offline data generation lasted 15.540483474731445 seconds

@@ -1,0 +1,75 @@
+load "msh3";
+load "medit";
+
+string directory = "/home/YOUR-PATH/3d/fem/";
+string observ;
+ifstream fopt(directory+"observ.txt");
+fopt>>observ;
+cout << observ << endl;
+
+// Parameters
+int nn = 30; // Mesh quality
+
+real L = 0.5;              // Domain size
+// --------------------------------------------------
+// 2. MESH
+// --------------------------------------------------
+int[int] labs = [1,2,2,1,1,2];
+mesh3 Th = cube(nn, nn, nn, label=labs);
+Th = trunc(Th, (x < L) | (y < L) | (z < L), label=1);
+
+cout << "Global mesh tetrahedra = " << Th.nt << endl;
+//plot(Th, wait=true);
+
+// --------------------------------------------------
+// 3. PATCH GENERATION (SAFE)
+// --------------------------------------------------
+real disc;
+
+if(observ=="DENSE_1521"){disc = 0.2;}
+if(observ=="MORE_676"){disc = 0.25;}
+if(observ=="NORMAL_361"){disc = 0.3;}
+if(observ=="LESS_225"){disc = 0.4;}
+if(observ=="COARSE_121"){disc = 0.45;}
+if(observ=="VERY_COARSE_49"){disc = 0.5;}
+//if(observ=="EXTREMELY_COARSE_25"){disc = 0.7;}
+//if(observ=="LEAST_16"){disc = 0.9;}
+int REG;
+real xc,yc,zc;
+string meshName;
+int counter = 0;
+mesh3[int] meshes(10000);
+mesh3 all;
+real size = 0.02;
+
+fespace Vh(Th,P1);
+cout << "ndof = "<< Vh.ndof<<endl;
+for (real xc = 0.05; xc <= 1; xc += disc){
+    for (real yc = 0.05; yc <= 1; yc += disc){
+        for (real zc = 0.05; zc <= 1; zc += disc){
+            if ( (xc < L) || (yc < L) || (zc < L) ){
+                // inside kept domain
+                counter++;
+                func insidePatch = ( abs(x-xc) <= size && abs(y-yc) <= size && abs(z-zc) <= size );
+                func fpatch = max(abs(x-xc), abs(y-yc), abs(z-zc));
+                meshes[counter] = trunc(Th, insidePatch, label=20+counter);
+                all = all + meshes[counter];
+               	varf observation(u,v)= int3d(Th)(insidePatch * v);
+               	real[int] FF = observation(0,Vh);
+               	//ofstream fobs(directory+"Offline/OBSERVATIONS/"+observ+"/riesz_"+string(counter)+".txt");
+               	//for (int jj=0;jj<FF.n ; jj++){ fobs << FF[jj] << "\n"; }
+            }
+        }
+    }
+}
+
+
+plot(Th, meshes);   
+medit("Patches", all);
+cout << "Number of patches = " << counter << endl;
+
+//ifstream fnb(directory+"Offline/nb_dof.txt");
+//int nbdof;
+// fnb>>nbdof;
+cout <<"counter = " << counter<<endl;
+// fcount<<counter-1;

@@ -1,0 +1,79 @@
+string directory = "/home/YOUR-PATH/code/2d/fem/";
+string observ;
+ifstream fopt(directory+"observ.txt");
+fopt>>observ;
+real x0=-2,x1=2;
+real y0=-2,y1=2;
+int n=80,m=80;
+mesh Th=square(n,m,[x0+(x1-x0)*x,y0+(y1-y0)*y]);
+savemesh(Th,"twosquares.msh");
+
+//Labeling both regions separately
+int N=Th(0,0).region;
+int M=Th(1.5,1.5).region;
+{
+	func f = max(abs(x),abs(y));
+	mesh Th1 = trunc(Th, (f<1), label=10);
+	int[int] rh = [N,10];
+	Th1 = change(Th1, region = rh);
+	mesh Th2 = trunc(Th, (f>1), label=20);
+	int[int] rb = [M,20];
+	Th2 = change(Th2, region = rb);
+	Th = Th2 + Th1;
+	// plot(Th1,Th2);
+}
+//Defining patches
+real disc;
+
+if(observ=="DENSE_1521"){disc = 0.1;}
+if(observ=="MORE_676"){disc = 0.15;}
+if(observ=="NORMAL_361"){disc = 0.2;}
+if(observ=="LESS_225"){disc = 0.25;}
+if(observ=="COARSE_121"){disc = 0.35;}
+if(observ=="VERY_COARSE_49"){disc = 0.5;}
+if(observ=="EXTREMELY_COARSE_25"){disc = 0.7;}
+if(observ=="LEAST_16"){disc = 0.9;}
+int REG;
+real xc,yc;
+string meshName;
+int counter = 1;
+mesh[int] meshes(9000);
+for (int i=1;i<4/disc;i++){
+	for (int j=1;j<4/disc;j++){
+		xc=2-i*disc;
+		yc=2-j*disc;
+		// if(abs(xc)-2<disc || abs(yc)-2<disc){
+			// xc=2-i*disc/2;
+			// yc=2-j*disc/2;
+		// }
+		REG=Th(xc,yc).region;
+		{
+			func f = max(abs(x-xc),abs(y-yc));
+			meshes[counter] = trunc(Th, (f<0.2/4), label=20+counter);
+			int[int] rh = [REG,20+counter*10];
+			meshes[counter] = change(meshes[counter], region = rh);
+			counter = counter+1;
+		}
+	}
+}
+plot(Th, meshes);
+// /*
+real phi = 3, homogNeumann = 0;
+fespace Vh(Th,P1);
+int nbdof;
+ifstream fnb(directory+"Offline/nb_dof.txt");
+// fnb>>nbdof;
+// cout <<"counter = " << counter<<endl;
+// fcount<<counter-1;
+for (int ic=1;ic<counter;ic++){
+	varf observation(u,v)= int2d(meshes[ic])(v);
+	real[int] FF = observation(0,Vh);
+	ofstream fobs(directory+"Offline/OBSERVATIONS/"+observ+"/riesz_"+string(ic)+".txt");
+	for (int jj=0;jj<FF.n ; jj++){
+	fobs << FF[jj] << endl;
+	}
+	// observations[ic] = int2d(meshes[ic])(unit);
+	// ofstream fob(directory+"Offline/RIESZ_OBSERV/riesz_"+string(ic)+".txt");
+	// fob<<observations[ic];
+}
+// */

@@ -1,0 +1,29 @@
+load "medit";
+string directory = "/home/YOUR_PATH/fem/";
+mesh Th = readmesh(directory+"twosquares.msh");
+ifstream fnb(directory+"Offline/nb_dof.txt");
+int nodes;
+fnb>>nodes;
+string fileName;
+fileName = directory+"../rom/sol_test.txt";
+ifstream resFile(fileName);
+real[int] vector(nodes);
+for (int kk=0;kk<nodes;kk++){
+	resFile >> vector[kk];
+	}
+fespace Vh(Th,P1);
+Vh u;
+
+//cout << vector <<endl;
+
+for (int i = 0; i < Vh.ndof; i++){
+    u[][i] = vector[i];
+}
+
+/***
+for (int ji=0;ji<nodes;ji++){
+	u[ji] = vector[ji];
+	}
+***/
+plot(u, fill=1, value=true, wait=10);
+//medit("sol", Th, u);
